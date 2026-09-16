@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tap Coin</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  body {
+    background: #1a1a2e; color: #fff;
+    font-family: sans-serif; height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #score { font-size: 42px; font-weight: bold; margin-bottom: 10px; }
+  #perTap { color: #8899aa; margin-bottom: 30px; }
+  #coin {
+    width: 180px; height: 180px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ffd700, #b8860b);
+    border: none; cursor: pointer;
+    font-size: 60px; position: relative;
+    transition: transform 0.05s;
+    box-shadow: 0 10px 30px rgba(255, 215, 0, 0.3);
+  }
+  #coin:active { transform: scale(0.9); }
+  .float {
+    position: absolute; pointer-events: none;
+    animation: up 0.8s ease-out forwards; font-weight: bold;
+  }
+  @keyframes up {
+    to { transform: translateY(-80px); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+  <div id="score">0</div>
+  <div id="perTap">+1 за тап</div>
+  <button id="coin">🪙</button>
+
+<script>
+  // Подключаем Telegram
+  const tg = window.Telegram.WebApp;
+  tg.expand();
+  tg.setHeaderColor('#1a1a2e');
+
+  // Загружаем сохранённый прогресс
+  let score = +(localStorage.getItem('score') || 0);
+  let perTap = 1;
+  update();
+
+  const coin = document.getElementById('coin');
+
+  coin.addEventListener('click', (e) => {
+    score += perTap;
+    localStorage.setItem('score', score);
+    update();
+
+    // Вылетающее "+1"
+    const f = document.createElement('div');
+    f.className = 'float';
+    f.textContent = '+' + perTap;
+    f.style.left = (e.clientX - 10) + 'px';
+    f.style.top = (e.clientY - 20) + 'px';
+    document.body.appendChild(f);
+    setTimeout(() => f.remove(), 800);
+  });
+
+  function update() {
+    document.getElementById('score').textContent = score.toLocaleString('ru');
+    document.getElementById('perTap').textContent = '+' + perTap + ' за тап';
+  }
+</script>
+</body>
+</html>
