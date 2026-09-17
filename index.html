@@ -2,74 +2,445 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tap Coin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>5opka Clicker</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
-  body {
-    background: #1a1a2e; color: #fff;
-    font-family: sans-serif; height: 100vh;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
+  :root {
+    --bg: #0d0d16; --panel: #1b1b2e; --panel2: #23233c;
+    --accent: #8b5cf6; --accent2: #ff3d8b; --gold: #ffd166;
+    --text: #eaeaf2; --muted: #8a8aa3; --green: #4ade80;
   }
-  #score { font-size: 42px; font-weight: bold; margin-bottom: 10px; }
-  #perTap { color: #8899aa; margin-bottom: 30px; }
-  #coin {
-    width: 180px; height: 180px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, #ffd700, #b8860b);
-    border: none; cursor: pointer;
-    font-size: 60px; position: relative;
-    transition: transform 0.05s;
-    box-shadow: 0 10px 30px rgba(255, 215, 0, 0.3);
-  }
-  #coin:active { transform: scale(0.9); }
-  .float {
-    position: absolute; pointer-events: none;
-    animation: up 0.8s ease-out forwards; font-weight: bold;
-  }
-  @keyframes up {
-    to { transform: translateY(-80px); opacity: 0; }
-  }
+  * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; }
+  body { font-family: system-ui, sans-serif; color:var(--text); }
+
+  #bg { position:fixed; inset:0; z-index:-2;
+    background:linear-gradient(160deg, #241640, #0d0d16 60%); }
+  #bg.has-img { background-size:cover; background-position:center; }
+  #veil { position:fixed; inset:0; z-index:-1; background:rgba(10,8,20,.62); }
+
+  #app { height:100%; max-width:480px; margin:0 auto; display:flex; flex-direction:column; }
+
+  /* ===== ШАПКА ===== */
+  header { display:flex; align-items:center; gap:12px; padding:14px 16px 6px; }
+  #avatar { width:52px; height:52px; border-radius:50%; flex-shrink:0;
+    background:radial-gradient(circle at 35% 35%, #a78bfa, #4c1d95);
+    border:2px solid var(--accent); display:flex; align-items:center; justify-content:center;
+    font-weight:bold; font-size:20px; }
+  #avatar.has-img { background-size:cover; background-position:center; }
+  .head-info { flex:1; min-width:0; }
+  #level-title { font-weight:bold; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .xpbar { height:8px; background:#00000055; border-radius:4px; margin-top:6px; overflow:hidden; }
+  #xpfill { height:100%; width:0%; border-radius:4px;
+    background:linear-gradient(90deg, var(--accent), var(--accent2)); transition:width .3s; }
+
+  /* ===== ВАЛЮТЫ ===== */
+  .currencies { display:flex; gap:10px; padding:8px 16px; }
+  .cur { flex:1; background:var(--panel); border:1px solid #ffffff14; border-radius:14px;
+    padding:10px 14px; display:flex; flex-direction:column; }
+  .cur-top { display:flex; align-items:center; gap:8px; }
+  .cur-icon { font-size:20px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; }
+  .cur-icon img { width:24px; height:24px; }
+  .cur-val { font-size:22px; font-weight:800; }
+  .cur-label { font-size:11px; color:var(--muted); margin-top:2px; }
+  #op-rate { font-size:11px; color:var(--green); margin-top:2px; }
+
+  /* ===== ЭКРАНЫ ===== */
+  main { flex:1; position:relative; overflow:hidden; }
+  .screen { position:absolute; inset:0; display:none; overflow-y:auto; padding:12px 16px 20px; }
+  .screen.active { display:block; }
+  #s-tap.active { display:flex; flex-direction:column; align-items:center; justify-content:space-evenly; overflow:hidden; }
+
+  /* энергия */
+  .energy-wrap { width:100%; max-width:340px; text-align:center; }
+  .energy-bar { height:14px; background:#00000066; border-radius:7px; overflow:hidden;
+    border:1px solid #ffffff14; }
+  #energy-fill { height:100%; background:linear-gradient(90deg,#fbbf24,#f59e0b); transition:width .2s; }
+  #energy-text { font-size:12px; color:var(--muted); margin-top:5px; }
+
+  /* таргет тапа */
+  #tap-target { width:210px; height:210px; border-radius:50%; border:4px solid var(--accent);
+    background:radial-gradient(circle at 35% 35%, #a78bfa, #3b0764);
+    box-shadow:0 0 50px rgba(139,92,246,.45), inset 0 0 30px rgba(0,0,0,.3);
+    cursor:pointer; position:relative; transition:transform .07s;
+    display:flex; align-items:center; justify-content:center; }
+  #tap-target:active { transform:scale(.92); }
+  #tap-target.has-img { background-size:cover; background-position:center; }
+  #tap-fallback { font-size:34px; font-weight:900; text-shadow:0 3px 12px #000000aa; }
+
+  #passive-info { color:var(--muted); font-size:14px; }
+  #passive-info b { color:var(--green); }
+
+  .float { position:fixed; z-index:50; pointer-events:none; font-weight:800;
+    color:var(--gold); text-shadow:0 2px 6px #000; animation:up .8s ease-out forwards; }
+  @keyframes up { to { transform:translateY(-90px); opacity:0; } }
+
+  /* ===== СПИСКИ ===== */
+  .sec-title { font-size:12px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:1px; margin:14px 2px 8px; }
+  .row { display:flex; align-items:center; gap:12px; background:var(--panel);
+    border:1px solid #ffffff12; border-radius:14px; padding:12px; margin-bottom:8px; }
+  .row-icon { width:46px; height:46px; border-radius:12px; background:var(--panel2);
+    display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+  .row-info { flex:1; min-width:0; }
+  .row-name { font-weight:700; font-size:14px; }
+  .row-name .lvl { color:var(--accent); font-size:12px; }
+  .row-desc { font-size:12px; color:var(--muted); margin-top:2px; }
+  .buy { border:none; border-radius:10px; padding:9px 12px; font-weight:800; font-size:13px;
+    background:linear-gradient(135deg, var(--accent), var(--accent2)); color:#fff;
+    cursor:pointer; white-space:nowrap; }
+  .buy.cant { background:#3a3a52; color:#77778f; }
+  .buy.meme { background:linear-gradient(135deg, #6d28d9, #be185d); }
+
+  /* ===== ПЕРЕРОЖДЕНИЕ ===== */
+  .prestige-card { background:linear-gradient(135deg, #2e1065, #1b1b2e);
+    border:1px solid #7c3aed66; border-radius:16px; padding:18px; text-align:center; margin-top:14px; }
+  .prestige-card h2 { font-size:18px; margin-bottom:6px; }
+  .prestige-card p { font-size:13px; color:var(--muted); line-height:1.5; }
+  .prestige-stat { display:flex; justify-content:center; gap:20px; margin:14px 0; }
+  .prestige-stat div b { display:block; font-size:20px; }
+  .prestige-stat div span { font-size:11px; color:var(--muted); }
+  #rebirth-btn { width:100%; border:none; border-radius:12px; padding:14px; font-size:16px;
+    font-weight:800; cursor:pointer; color:#fff;
+    background:linear-gradient(135deg, #a855f7, #ec4899); }
+  #rebirth-btn:disabled { background:#3a3a52; color:#77778f; }
+
+  .soon-card { text-align:center; padding:50px 20px; color:var(--muted); }
+  .soon-card .big { font-size:40px; margin-bottom:10px; }
+
+  #reset-link { display:block; text-align:center; color:#666680; font-size:11px;
+    margin-top:16px; text-decoration:underline; }
+
+  /* ===== ХОТБАР ===== */
+  nav { display:flex; background:#12121f; border-top:1px solid #ffffff14;
+    padding-bottom:env(safe-area-inset-bottom); }
+  .tab { flex:1; background:none; border:none; color:var(--muted); padding:9px 0 7px;
+    display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer;
+    font-family:inherit; }
+  .tab .ico { font-size:22px; }
+  .tab span:last-child { font-size:10px; font-weight:700; }
+  .tab.active { color:var(--accent); }
+
+  /* плашка-уведомление */
+  #toast { position:fixed; top:14px; left:50%; transform:translateX(-50%) translateY(-100px);
+    background:var(--panel2); border:1px solid var(--accent); color:var(--text);
+    padding:12px 18px; border-radius:12px; font-size:13px; z-index:100; transition:transform .4s;
+    max-width:90%; text-align:center; }
+  #toast.show { transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
-  <div id="score">0</div>
-  <div id="perTap">+1 за тап</div>
-  <button id="coin">🪙</button>
+<div id="bg"></div><div id="veil"></div>
+
+<div id="app">
+  <header>
+    <div id="avatar">5</div>
+    <div class="head-info">
+      <div id="level-title">Зритель</div>
+      <div class="xpbar"><div id="xpfill"></div></div>
+    </div>
+  </header>
+
+  <div class="currencies">
+    <div class="cur">
+      <div class="cur-top"><span class="cur-icon" id="op-icon">⭐</span>
+        <span class="cur-val" id="op-val">0</span></div>
+      <div class="cur-label">Очки Популярности</div>
+      <div id="op-rate">+1 за тап</div>
+    </div>
+    <div class="cur">
+      <div class="cur-top"><span class="cur-icon" id="om-icon">💀</span>
+        <span class="cur-val" id="om-val">0</span></div>
+      <div class="cur-label">Очки Мемности</div>
+      <div id="om-mult">+0% доход</div>
+    </div>
+  </div>
+
+  <main>
+    <!-- ЭКРАН 1: ТАП -->
+    <section id="s-tap" class="screen active">
+      <div class="energy-wrap">
+        <div class="energy-bar"><div id="energy-fill"></div></div>
+        <div id="energy-text">⚡ 500 / 500</div>
+      </div>
+      <button id="tap-target"><span id="tap-fallback">5opka</span></button>
+      <div id="passive-info">Пассивный доход: <b>+0</b> ОП/сек</div>
+    </section>
+
+    <!-- ЭКРАН 2: АПГРЕЙДЫ -->
+    <section id="s-upg" class="screen">
+      <div id="upg-list"></div>
+      <a href="#" id="reset-link">сбросить весь прогресс</a>
+    </section>
+
+    <!-- ЭКРАН 3: МЕМЫ / ПЕРЕРОЖДЕНИЕ -->
+    <section id="s-meme" class="screen">
+      <div class="prestige-card">
+        <h2>💀 Стать мемом</h2>
+        <p>Перерождение обнуляет ОП и апгрейды,<br>но даёт Очки Мемности навсегда.</p>
+        <div class="prestige-stat">
+          <div><b id="p-om">0</b><span>всего ОМ</span></div>
+          <div><b id="p-gain">0</b><span>получишь сейчас</span></div>
+        </div>
+        <button id="rebirth-btn">Переродиться 💀</button>
+        <p style="margin-top:10px">Нужно заработать 100K ОП за забег</p>
+      </div>
+      <div class="sec-title">Мемные апгрейды (за ОМ, не сбрасываются)</div>
+      <div id="meme-list"></div>
+    </section>
+
+    <!-- ЭКРАН 4: СКОРО -->
+    <section id="s-soon" class="screen">
+      <div class="soon-card">
+        <div class="big">🚧</div>
+        <h2>Скоро здесь будет:</h2>
+        <p style="margin-top:8px; line-height:2">🏆 Таблица лидеров<br>🎯 Задания и ачивки<br>🤝 Реферальная система</p>
+      </div>
+    </section>
+  </main>
+
+  <nav>
+    <button class="tab active" data-s="s-tap"><span class="ico">🎬</span><span>Стрим</span></button>
+    <button class="tab" data-s="s-upg"><span class="ico">🛒</span><span>Апгрейды</span></button>
+    <button class="tab" data-s="s-meme"><span class="ico">💀</span><span>Мемы</span></button>
+    <button class="tab" data-s="s-soon"><span class="ico">🏆</span><span>Топ</span></button>
+  </nav>
+</div>
+<div id="toast"></div>
 
 <script>
-  // Подключаем Telegram
-  const tg = window.Telegram.WebApp;
-  tg.expand();
-  tg.setHeaderColor('#1a1a2e');
+const tg = window.Telegram.WebApp;
+tg.expand();
 
-  // Загружаем сохранённый прогресс
-  let score = +(localStorage.getItem('score') || 0);
-  let perTap = 1;
-  update();
+/* ============ КАРТИНКИ (клади свои файлы в папку img) ============ */
+const SKIN = {
+  background: 'img/background.jpg',  // задний фон
+  avatar:     'img/avatar.png',       // аватар в шапке
+  target:     'img/target.png',       // то, по чему тапаем
+  opIcon:     'img/op.png',           // иконка ОП
+  omIcon:     'img/om.png',           // иконка ОМ
+};
 
-  const coin = document.getElementById('coin');
+function bgImage(el, url) {
+  const im = new Image();
+  im.onload = () => { el.style.backgroundImage = `url("${url}")`; el.classList.add('has-img'); };
+  im.src = url;
+}
+function iconImage(el, url) {
+  const im = new Image();
+  im.onload = () => { el.textContent = ''; const t = document.createElement('img'); t.src = url; el.appendChild(t); };
+  im.src = url;
+}
+bgImage(document.getElementById('bg'), SKIN.background);
+bgImage(document.getElementById('avatar'), SKIN.avatar);
+bgImage(document.getElementById('tap-target'), SKIN.target);
+iconImage(document.getElementById('op-icon'), SKIN.opIcon);
+iconImage(document.getElementById('om-icon'), SKIN.omIcon);
 
-  coin.addEventListener('click', (e) => {
-    score += perTap;
-    localStorage.setItem('score', score);
-    update();
+/* ============ ДАННЫЕ АПГРЕЙДОВ (тут меняешь баланс и названия) ============ */
+const TAP_UPG = [
+  { id:'mic',    icon:'🎤', name:'Микрофон',            desc:'+1 за тап',      base:50,     growth:1.5, val:1 },
+  { id:'voice',  icon:'🎙️', name:'Мемные озвучки',      desc:'+4 за тап',      base:400,    growth:1.5, val:4 },
+  { id:'react',  icon:'💬', name:'Реакции на чат',      desc:'+12 за тап',     base:2500,   growth:1.5, val:12 },
+  { id:'chal',   icon:'🔥', name:'Кринж-челленджи',     desc:'+40 за тап',     base:15000,  growth:1.5, val:40 },
+  { id:'legend', icon:'⚡', name:'Легендарные моменты', desc:'+150 за тап',    base:100000, growth:1.5, val:150 },
+];
+const PASSIVE_UPG = [
+  { id:'clips',  icon:'✂️', name:'Клипы на ютубе',      desc:'+10 ОП/сек',   base:300,     growth:1.6, val:10 },
+  { id:'shorts', icon:'📱', name:'Тик-ток шортсы',      desc:'+50 ОП/сек',   base:3000,    growth:1.6, val:50 },
+  { id:'tg',     icon:'📣', name:'Телеграм-канал',      desc:'+250 ОП/сек',  base:30000,   growth:1.6, val:250 },
+  { id:'merch',  icon:'👕', name:'Мерч',                desc:'+1.2K ОП/сек', base:250000,  growth:1.6, val:1200 },
+  { id:'pad',    icon:'🎮', name:'Собственный пад',     desc:'+6K ОП/сек',   base:2000000, growth:1.6, val:6000 },
+];
+const ENERGY_UPG = [
+  { id:'coffee', icon:'☕', name:'Кофеин',       desc:'+50 макс. энергии',  base:1000,  growth:2, val:50 },
+  { id:'drink',  icon:'🥤', name:'Энергетики',   desc:'+150 макс. энергии', base:25000, growth:2, val:150 },
+];
+const MEME_UPG = [
+  { id:'m_tap',     icon:'🧢', name:'Вечный мем',          desc:'+25% за тап',      base:2, growth:1.6, val:0.25 },
+  { id:'m_pass',    icon:'📼', name:'Бессмертный клип',    desc:'+25% пассива',     base:3, growth:1.6, val:0.25 },
+  { id:'m_energy',  icon:'🔋', name:'Мемная батарейка',    desc:'+200 макс. энергии', base:2, growth:1.5, val:200 },
+  { id:'m_legacy',  icon:'👑', name:'Мемное наследие',     desc:'+10% ко всему',    base:5, growth:1.8, val:0.10 },
+];
+const TITLES = ['Зритель','Начинающий','Малый блогер','Стример','Известный стример',
+  'Топ стример','Любимец чата','Легенда интернета','Мем-император'];
 
-    // Вылетающее "+1"
-    const f = document.createElement('div');
-    f.className = 'float';
-    f.textContent = '+' + perTap;
-    f.style.left = (e.clientX - 10) + 'px';
-    f.style.top = (e.clientY - 20) + 'px';
-    document.body.appendChild(f);
-    setTimeout(() => f.remove(), 800);
-  });
+/* ============ СОСТОЯНИЕ ============ */
+let S = JSON.parse(localStorage.getItem('opka_save') || 'null') || {
+  op: 0, om: 0, runEarned: 0, totalEarned: 0,
+  energy: 500, upg: {}, meme: {}, lastSave: Date.now()
+};
+const lvl = (id, kind) => (kind === 'meme' ? S.meme : S.upg)[id] || 0;
+const sum = (arr) => arr.reduce((a, u) => a + u.val * lvl(u.id), 0);
+const cost = (u, kind) => Math.ceil(u.base * Math.pow(u.growth, lvl(u.id, kind)));
 
-  function update() {
-    document.getElementById('score').textContent = score.toLocaleString('ru');
-    document.getElementById('perTap').textContent = '+' + perTap + ' за тап';
+const mult    = () => (1 + S.om * 0.1) * (1 + lvl('m_legacy','meme') * 0.10);
+const perTap  = () => Math.max(1, Math.round((1 + sum(TAP_UPG)) * mult() * (1 + lvl('m_tap','meme') * 0.25)));
+const perSec  = () => Math.round(sum(PASSIVE_UPG) * mult() * (1 + lvl('m_pass','meme') * 0.25));
+const maxEn   = () => 500 + sum(ENERGY_UPG) + lvl('m_energy','meme') * 200;
+const memeGain = () => Math.floor(Math.sqrt(S.runEarned / 100000));
+
+/* ============ ФОРМАТИРОВАНИЕ ============ */
+function fmt(n) {
+  n = Math.floor(n);
+  if (n < 1000) return '' + n;
+  const u = ['K','M','B','T']; let i = -1, v = n;
+  while (v >= 1000 && i < u.length - 1) { v /= 1000; i++; }
+  return v.toFixed(v < 10 ? 2 : 1).replace(/\.?0+$/, '') + u[i];
+}
+
+/* ============ ТАП ============ */
+const target = document.getElementById('tap-target');
+target.addEventListener('click', (e) => {
+  if (S.energy < 1) return;
+  S.energy -= 1;
+  const gain = perTap();
+  S.op += gain; S.runEarned += gain; S.totalEarned += gain;
+  try { tg.HapticFeedback.impactOccurred('light'); } catch(_) {}
+  const f = document.createElement('div');
+  f.className = 'float'; f.textContent = '+' + fmt(gain);
+  f.style.left = (e.clientX - 15) + 'px';
+  f.style.top  = (e.clientY - 25) + 'px';
+  document.body.appendChild(f);
+  setTimeout(() => f.remove(), 800);
+});
+
+/* ============ ХОТБАР / ЭКРАНЫ ============ */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === t.dataset.s));
+  if (t.dataset.s === 's-upg') renderUpgrades();
+  if (t.dataset.s === 's-meme') renderMeme();
+}));
+
+/* ============ ПОКУПКИ ============ */
+function buy(kind, id) {
+  const all = kind === 'meme' ? MEME_UPG : [...TAP_UPG, ...PASSIVE_UPG, ...ENERGY_UPG];
+  const u = all.find(x => x.id === id);
+  const c = cost(u, kind);
+  if (kind === 'meme') {
+    if (S.om < c) return;
+    S.om -= c; S.meme[id] = lvl(id, 'meme') + 1;
+  } else {
+    if (S.op < c) return;
+    S.op -= c; S.upg[id] = lvl(id) + 1;
   }
+  renderUpgrades(); renderMeme();
+}
+
+document.getElementById('upg-list').addEventListener('click', (e) => {
+  const b = e.target.closest('.buy'); if (b) buy('op', b.dataset.id);
+});
+document.getElementById('meme-list').addEventListener('click', (e) => {
+  const b = e.target.closest('.buy'); if (b) buy('meme', b.dataset.id);
+});
+
+function row(u, kind, currencyIcon) {
+  const c = cost(u, kind);
+  const afford = (kind === 'meme' ? S.om : S.op) >= c;
+  return `<div class="row">
+    <div class="row-icon">${u.icon}</div>
+    <div class="row-info">
+      <div class="row-name">${u.name} <span class="lvl">ур.${lvl(u.id, kind)}</span></div>
+      <div class="row-desc">${u.desc}</div>
+    </div>
+    <button class="buy ${kind} ${afford ? '' : 'cant'}" data-id="${u.id}">${currencyIcon} ${fmt(c)}</button>
+  </div>`;
+}
+function renderUpgrades() {
+  document.getElementById('upg-list').innerHTML =
+    `<div class="sec-title">Сила тапа</div>` + TAP_UPG.map(u => row(u, 'op', '⭐')).join('') +
+    `<div class="sec-title">Пассивный доход</div>` + PASSIVE_UPG.map(u => row(u, 'op', '⭐')).join('') +
+    `<div class="sec-title">Энергия</div>` + ENERGY_UPG.map(u => row(u, 'op', '⭐')).join('');
+}
+function renderMeme() {
+  document.getElementById('p-om').textContent = S.om;
+  document.getElementById('p-gain').textContent = memeGain();
+  document.getElementById('rebirth-btn').disabled = memeGain() < 1;
+  document.getElementById('meme-list').innerHTML = MEME_UPG.map(u => row(u, 'meme', '💀')).join('');
+}
+
+/* ============ ПЕРЕРОЖДЕНИЕ ============ */
+document.getElementById('rebirth-btn').addEventListener('click', () => {
+  const gain = memeGain();
+  if (gain < 1) return;
+  S.om += gain; S.op = 0; S.runEarned = 0; S.upg = {}; S.energy = maxEn();
+  renderMeme(); updateHUD();
+  toast(`💀 Ты стал мемом! +${gain} ОМ, доход +${gain * 10}%`);
+  try { tg.HapticFeedback.notificationOccurred('success'); } catch(_) {}
+});
+
+/* ============ ИГРОВОЙ ЦИКЛ ============ */
+let lastTick = Date.now();
+setInterval(() => {
+  const now = Date.now(), dt = (now - lastTick) / 1000; lastTick = now;
+  S.energy = Math.min(S.energy + dt, maxEn());
+  const income = perSec() * dt;
+  if (income > 0) { S.op += income; S.runEarned += income; S.totalEarned += income; }
+  updateHUD();
+}, 250);
+
+function updateHUD() {
+  document.getElementById('op-val').textContent = fmt(S.op);
+  document.getElementById('om-val').textContent = S.om;
+  document.getElementById('op-rate').textContent = `+${fmt(perTap())} за тап · +${fmt(perSec())}/сек`;
+  document.getElementById('om-mult').textContent = `+${Math.round((mult() - 1) * 100)}% доход`;
+  document.getElementById('energy-fill').style.width = (S.energy / maxEn() * 100) + '%';
+  document.getElementById('energy-text').textContent = `⚡ ${Math.floor(S.energy)} / ${maxEn()}`;
+  document.getElementById('passive-info').innerHTML = `Пассивный доход: <b>+${fmt(perSec())}</b> ОП/сек`;
+
+  const level = 1 + Math.floor(Math.sqrt(S.totalEarned / 500));
+  const prev = 500 * Math.pow(level - 1, 2), next = 500 * Math.pow(level, 2);
+  document.getElementById('xpfill').style.width = Math.min(100, (S.totalEarned - prev) / (next - prev) * 100) + '%';
+  document.getElementById('level-title').textContent =
+    `Ур. ${level} · ` + TITLES[Math.min(Math.floor((level - 1) / 3), TITLES.length - 1)];
+
+  document.querySelectorAll('.buy').forEach(b => b.classList.remove('cant'));
+  renderAfford();
+}
+function renderAfford() {
+  const all = [...TAP_UPG, ...PASSIVE_UPG, ...ENERGY_UPG];
+  document.querySelectorAll('.buy:not(.meme)').forEach(b => {
+    const u = all.find(x => x.id === b.dataset.id);
+    if (u && S.op < cost(u, 'op')) b.classList.add('cant');
+  });
+  document.querySelectorAll('.buy.meme').forEach(b => {
+    const u = MEME_UPG.find(x => x.id === b.dataset.id);
+    if (u && S.om < cost(u, 'meme')) b.classList.add('cant');
+  });
+}
+
+/* ============ СОХРАНЕНИЕ ============ */
+function save() { S.lastSave = Date.now(); localStorage.setItem('opka_save', JSON.stringify(S)); }
+setInterval(save, 5000);
+window.addEventListener('beforeunload', save);
+
+/* оффлайн-доход (максимум 2 часа) */
+(() => {
+  const away = Math.min((Date.now() - S.lastSave) / 1000, 7200);
+  const income = Math.floor(perSec() * away);
+  if (income > 0) {
+    S.op += income; S.runEarned += income; S.totalEarned += income;
+    toast(`Пока тебя не было (${Math.floor(away / 60)} мин), заработано ${fmt(income)} ОП ⭐`);
+  }
+  S.energy = Math.min(S.energy + away, maxEn());
+})();
+
+document.getElementById('reset-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (confirm('Точно сбросить ВЕСЬ прогресс?')) {
+    localStorage.removeItem('opka_save'); location.reload();
+  }
+});
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+updateHUD();
 </script>
 </body>
 </html>
